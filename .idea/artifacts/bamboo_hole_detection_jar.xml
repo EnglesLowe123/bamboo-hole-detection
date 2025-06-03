@@ -1,0 +1,11 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="bamboo-hole-detection:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/bamboo_hole_detection_jar</output-path>
+    <root id="archive" name="bamboo-hole-detection.jar">
+      <element id="module-output" name="bamboo-hole-detection" />
+      <element id="module-test-output" name="bamboo-hole-detection" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/../opencv/build/java/opencv-490.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/lib/opencv-490.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>
