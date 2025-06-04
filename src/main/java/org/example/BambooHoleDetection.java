@@ -101,9 +101,6 @@ public class BambooHoleDetection {
             detectedImageLabel.setIcon(new ImageIcon(newDetectedImage));
         });
 
-
-
-
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.add(fileListScrollPane, BorderLayout.WEST);
         mainPanel.add(imagePanel, BorderLayout.CENTER);
