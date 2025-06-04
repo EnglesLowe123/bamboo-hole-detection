@@ -8,10 +8,10 @@ import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
 import java.awt.*;
 import java.io.File;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * @author Admin
- */
 public class BambooHoleDetection {
     static {
         System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
@@ -24,18 +24,107 @@ public class BambooHoleDetection {
     private static int thresholdValue = 128;
     private static final int MAX_THRESHOLD_VALUE = 255;
 
+    private static List<File> imageFiles = new ArrayList<>();
+    private static int currentIndex = 0;
+    private static JLabel originalImageLabel = new JLabel();
+    private static JLabel sobelImageLabel = new JLabel();
+    private static JLabel sobelBinaryLabel = new JLabel();
+    private static JLabel detectedImageLabel = new JLabel();
+
     public static void main(String[] args) {
-        File selectedFile = openImageFileChooser();
-        if (selectedFile == null) {
-            System.out.println("未选择文件");
+        File selectedFolder = openFolderChooser();
+        if (selectedFolder == null) {
+            System.out.println("未选择文件夹");
             return;
         }
 
-        String inputPath = selectedFile.getAbsolutePath();
-        src = Imgcodecs.imread(inputPath);
+        loadImagesFromFolder(selectedFolder);
+
+        if (imageFiles.isEmpty()) {
+            System.out.println("文件夹中没有有效的图像文件");
+            return;
+        }
+
+        createMainWindow();
+    }
+
+    private static void loadImagesFromFolder(File folder) {
+        File[] files = folder.listFiles(file -> {
+            String name = file.getName().toLowerCase();
+            return name.endsWith(".jpg") || name.endsWith(".png") || name.endsWith(".jpeg");
+        });
+
+        if (files != null) {
+            imageFiles.clear();
+            for (File file : files) {
+                imageFiles.add(file);
+            }
+        }
+    }
+
+    private static void createMainWindow() {
+        JFrame frame = new JFrame("Bamboo Hole Detection");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(1200, 800);
+
+        // 左侧文件列表
+        JList<File> fileList = new JList<>(imageFiles.toArray(new File[0]));
+        fileList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        fileList.addListSelectionListener(e -> {
+            currentIndex = fileList.getSelectedIndex();
+            if (currentIndex >= 0) {
+                processCurrentImage();
+            }
+        });
+
+        JScrollPane fileListScrollPane = new JScrollPane(fileList);
+        fileListScrollPane.setPreferredSize(new Dimension(200, 0));
+        fileListScrollPane.setBorder(BorderFactory.createTitledBorder("图像列表"));
+
+        // 右侧图像显示
+        JPanel imagePanel = new JPanel(new GridLayout(2, 2));
+        imagePanel.add(wrapInScroll(originalImageLabel, "原图"));
+        imagePanel.add(wrapInScroll(sobelImageLabel, "Sobel 图"));
+        imagePanel.add(wrapInScroll(sobelBinaryLabel, "Sobel 二值图"));
+        imagePanel.add(wrapInScroll(detectedImageLabel, "检测结果"));
+
+        // 底部滑块
+        JSlider slider = new JSlider(0, MAX_THRESHOLD_VALUE, thresholdValue);
+        slider.setMajorTickSpacing(50);
+        slider.setPaintTicks(true);
+        slider.setPaintLabels(true);
+        slider.addChangeListener(e -> {
+            thresholdValue = slider.getValue();
+            updateSobelBinary(thresholdValue);
+            Image newDetectedImage = updateDetection();
+            sobelBinaryLabel.setIcon(new ImageIcon(matToImage(sobelBinary)));
+            detectedImageLabel.setIcon(new ImageIcon(newDetectedImage));
+        });
+
+
+
+
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.add(fileListScrollPane, BorderLayout.WEST);
+        mainPanel.add(imagePanel, BorderLayout.CENTER);
+        mainPanel.add(slider, BorderLayout.SOUTH);
+
+        frame.add(mainPanel);
+        frame.setVisible(true);
+
+        // 显示第一个图像
+        if (!imageFiles.isEmpty()) {
+            fileList.setSelectedIndex(0);
+            processCurrentImage();
+        }
+    }
+
+    private static void processCurrentImage() {
+        File file = imageFiles.get(currentIndex);
+        src = Imgcodecs.imread(file.getAbsolutePath());
 
         if (src.empty()) {
-            System.out.println("图像读取失败");
+            System.out.println("图像加载失败: " + file.getName());
             return;
         }
 
@@ -46,56 +135,13 @@ public class BambooHoleDetection {
         sobelBinary = new Mat();
         updateSobelBinary(thresholdValue);
         detectedImage = src.clone();
+        updateDetection();
 
-        // 创建主窗口
-        JFrame frame = new JFrame("Sobel Threshold and Detection");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(1100, 800);
-
-        // 4个图像标签
-        JLabel grayImageLabel = new JLabel(new ImageIcon(matToImage(gray)));
-        JLabel sobelImageLabel = new JLabel(new ImageIcon(matToImage(sobelImage)));
-        JLabel sobelBinaryLabel = new JLabel(new ImageIcon(matToImage(sobelBinary)));
-        JLabel detectedImageLabel = new JLabel(new ImageIcon(updateDetection()));
-
-        // 网格布局 2行2列
-        JPanel imagePanel = new JPanel(new GridLayout(2, 2));
-        imagePanel.add(wrapInScroll(grayImageLabel, "灰度图"));
-        imagePanel.add(wrapInScroll(sobelImageLabel, "Sobel图"));
-        imagePanel.add(wrapInScroll(sobelBinaryLabel, "Sobel二值图"));
-        imagePanel.add(wrapInScroll(detectedImageLabel, "轮廓检测结果"));
-
-        JSlider slider = getJSlider(sobelBinaryLabel, detectedImageLabel);
-
-        frame.setLayout(new BorderLayout());
-        frame.add(imagePanel, BorderLayout.CENTER);
-        frame.add(slider, BorderLayout.SOUTH);
-
-        frame.setVisible(true);
-    }
-
-    private static JSlider getJSlider(JLabel sobelBinaryLabel, JLabel detectedImageLabel) {
-        JSlider slider = new JSlider(0, MAX_THRESHOLD_VALUE, thresholdValue);
-        slider.setMajorTickSpacing(50);
-        slider.setPaintTicks(true);
-        slider.setPaintLabels(true);
-
-        slider.addChangeListener(e -> {
-            thresholdValue = slider.getValue();
-            new Thread(() -> {
-                // 更新 sobel二值图
-                updateSobelBinary(thresholdValue);
-
-                // 更新检测结果
-                Image detectionImg = updateDetection();
-
-                SwingUtilities.invokeLater(() -> {
-                    sobelBinaryLabel.setIcon(new ImageIcon(matToImage(sobelBinary)));
-                    detectedImageLabel.setIcon(new ImageIcon(detectionImg));
-                });
-            }).start();
-        });
-        return slider;
+        // 更新图像显示
+        originalImageLabel.setIcon(new ImageIcon(matToImage(src)));
+        sobelImageLabel.setIcon(new ImageIcon(matToImage(sobelImage)));
+        sobelBinaryLabel.setIcon(new ImageIcon(matToImage(sobelBinary)));
+        detectedImageLabel.setIcon(new ImageIcon(matToImage(detectedImage)));
     }
 
     private static Mat applySobel(Mat gray) {
@@ -112,11 +158,13 @@ public class BambooHoleDetection {
         Core.convertScaleAbs(gradY, absGradY);
 
         Core.addWeighted(absGradX, 0.5, absGradY, 0.5, 0, sobel);
-
         return sobel;
     }
 
     private static void updateSobelBinary(int threshold) {
+        if (sobelBinary == null || sobelBinary.empty()) {
+            sobelBinary = new Mat(sobelImage.size(), sobelImage.type());
+        }
         Imgproc.threshold(sobelImage, sobelBinary, threshold, MAX_THRESHOLD_VALUE, Imgproc.THRESH_BINARY);
     }
 
@@ -141,99 +189,21 @@ public class BambooHoleDetection {
     }
 
     private static Image matToImage(Mat mat) {
-        MatOfByte matOfByte = new MatOfByte();
-        Imgcodecs.imencode(".jpg", mat, matOfByte);
-        byte[] byteArray = matOfByte.toArray();
-        return Toolkit.getDefaultToolkit().createImage(byteArray);
+        MatOfByte buffer = new MatOfByte();
+        Imgcodecs.imencode(".jpg", mat, buffer);
+        return Toolkit.getDefaultToolkit().createImage(buffer.toArray());
     }
 
-    private static File openImageFileChooser() {
+    private static File openFolderChooser() {
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("选择竹子图像文件");
-        chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-
-        chooser.setAcceptAllFileFilterUsed(false);
-        chooser.addChoosableFileFilter(new FileFilter() {
-            @Override
-            public boolean accept(File f) {
-                if (f.isDirectory()) {
-                    return true;
-                }
-                String name = f.getName().toLowerCase();
-                return name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg");
-            }
-            @Override
-            public String getDescription() {
-                return "图片文件 (*.png, *.jpg, *.jpeg)";
-            }
-        });
-
-        chooser.setAccessory(new ImagePreview(chooser));
-
+        chooser.setDialogTitle("选择包含图像的文件夹");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         int result = chooser.showOpenDialog(null);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            return chooser.getSelectedFile();
-        }
-        return null;
+        return result == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile() : null;
     }
 
-    static class ImagePreview extends JComponent {
-        private static final int PREVIEW_WIDTH = 150;
-        private static final int PREVIEW_HEIGHT = 150;
-        private ImageIcon thumbnail;
-        private File file;
-
-        public ImagePreview(JFileChooser chooser) {
-            setPreferredSize(new Dimension(PREVIEW_WIDTH, PREVIEW_HEIGHT));
-            chooser.addPropertyChangeListener(evt -> {
-                boolean update = false;
-                String prop = evt.getPropertyName();
-
-                if (JFileChooser.SELECTED_FILE_CHANGED_PROPERTY.equals(prop)) {
-                    file = (File) evt.getNewValue();
-                    if (file != null && file.isFile()) {
-                        loadImage();
-                        update = true;
-                    }
-                }
-                if (update) {
-                    repaint();
-                }
-            });
-        }
-
-        private void loadImage() {
-            thumbnail = null;
-            if (file == null) {
-                return;
-            }
-
-            ImageIcon tmpIcon = new ImageIcon(file.getPath());
-            if (tmpIcon.getIconWidth() > PREVIEW_WIDTH) {
-                thumbnail = new ImageIcon(tmpIcon.getImage().getScaledInstance(
-                        PREVIEW_WIDTH, -1, Image.SCALE_SMOOTH));
-            } else {
-                thumbnail = tmpIcon;
-            }
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            if (thumbnail == null) {
-                g.setColor(Color.lightGray);
-                g.fillRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-                g.setColor(Color.black);
-                g.drawString("No Preview", PREVIEW_WIDTH / 3, PREVIEW_HEIGHT / 2);
-            } else {
-                int x = (PREVIEW_WIDTH - thumbnail.getIconWidth()) / 2;
-                int y = (PREVIEW_HEIGHT - thumbnail.getIconHeight()) / 2;
-                thumbnail.paintIcon(this, g, x, y);
-            }
-        }
-    }
-
-    private static JScrollPane wrapInScroll(JComponent comp, String title) {
-        JScrollPane scroll = new JScrollPane(comp);
+    private static JScrollPane wrapInScroll(JComponent component, String title) {
+        JScrollPane scroll = new JScrollPane(component);
         scroll.setBorder(BorderFactory.createTitledBorder(title));
         return scroll;
     }
