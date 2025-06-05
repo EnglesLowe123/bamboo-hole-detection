@@ -62,6 +62,7 @@ public class BambooHoleDetection {
         languageSelector = new JComboBox<>(languageBundles.keySet().toArray(new String[0]));
         languageSelector.addActionListener(e -> updateLanguage());
     }
+
     private static void validateResourceBundles() {
         Set<String> baseKeys = new HashSet<>(languageBundles.get("English").keySet()); // 假设英文为基础语言
         for (Map.Entry<String, ResourceBundle> entry : languageBundles.entrySet()) {
@@ -173,7 +174,44 @@ public class BambooHoleDetection {
             fileList.setSelectedIndex(0);
             processCurrentImage();
         }
+        JButton saveButton = new JButton(currentBundle.getString("save_button"));
+        saveButton.addActionListener(e -> saveProcessedImages());
+
+        // 保存
+        JPanel bottomPanel = new JPanel(new BorderLayout());
+        bottomPanel.add(slider, BorderLayout.CENTER);
+        bottomPanel.add(saveButton, BorderLayout.EAST);
+
+        mainPanel.add(bottomPanel, BorderLayout.SOUTH);
+
     }
+
+    private static void saveProcessedImages() {
+        if (detectedImage == null || detectedImage.empty()) {
+            JOptionPane.showMessageDialog(frame, currentBundle.getString("no_image_to_save"),
+                    currentBundle.getString("error_title"), JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle(currentBundle.getString("save_image"));
+        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fileChooser.setSelectedFile(new File("processed_image.jpg")); // 默认文件名
+
+        int userSelection = fileChooser.showSaveDialog(frame);
+        if (userSelection == JFileChooser.APPROVE_OPTION) {
+            File fileToSave = fileChooser.getSelectedFile();
+            boolean success = Imgcodecs.imwrite(fileToSave.getAbsolutePath(), detectedImage);
+            if (success) {
+                JOptionPane.showMessageDialog(frame, currentBundle.getString("image_saved_successfully"),
+                        currentBundle.getString("info_title"), JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(frame, currentBundle.getString("image_save_failed"),
+                        currentBundle.getString("error_title"), JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
     private static void updateLabelsAndTitles() {
         // 更新窗口标题
         if (frame != null) {
@@ -205,7 +243,6 @@ public class BambooHoleDetection {
                     .setText(currentBundle.getString("language"));
         }
     }
-
 
     private static void updateLanguage() {
         String selectedLanguage = (String) languageSelector.getSelectedItem();
