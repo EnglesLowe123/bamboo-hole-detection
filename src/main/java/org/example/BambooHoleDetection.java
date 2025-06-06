@@ -110,6 +110,7 @@ public class BambooHoleDetection {
     private static JSlider slider;
     private static JScrollPane fileListScrollPane;
     private static JLabel languageLabel;
+    //1111
     private static void createMainWindow() {
         frame = new JFrame(currentBundle.getString("title"));
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -251,6 +252,7 @@ public class BambooHoleDetection {
             SwingUtilities.invokeLater(BambooHoleDetection::updateLabelsAndTitles);
         }
     }
+    //1111
     private static void processCurrentImage() {
         File file = imageFiles.get(currentIndex);
         src = Imgcodecs.imread(file.getAbsolutePath());
@@ -261,7 +263,7 @@ public class BambooHoleDetection {
         }
 
         Mat gray = new Mat();
-        Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY);
+        Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY);  //灰度处理
 
         sobelImage = applySobel(gray);
         sobelBinary = new Mat();
@@ -275,7 +277,7 @@ public class BambooHoleDetection {
         sobelBinaryLabel.setIcon(new ImageIcon(matToImage(sobelBinary)));
         detectedImageLabel.setIcon(new ImageIcon(matToImage(detectedImage)));
     }
-
+    //1111
     private static Mat applySobel(Mat gray) {
         Mat gradX = new Mat();
         Mat gradY = new Mat();
@@ -293,13 +295,14 @@ public class BambooHoleDetection {
         return sobel;
     }
 
+    //二值化
     private static void updateSobelBinary(int threshold) {
         if (sobelBinary == null || sobelBinary.empty()) {
             sobelBinary = new Mat(sobelImage.size(), sobelImage.type());
         }
         Imgproc.threshold(sobelImage, sobelBinary, threshold, MAX_THRESHOLD_VALUE, Imgproc.THRESH_BINARY);
     }
-
+    //1111
     private static Image updateDetection() {
         detectedImage = src.clone();
 
@@ -340,6 +343,4 @@ public class BambooHoleDetection {
         scroll.setBorder(BorderFactory.createTitledBorder(currentBundle.getString(key)));
         return scroll;
     }
-
-
 }
